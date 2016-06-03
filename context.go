@@ -17,6 +17,7 @@ type Context struct {
 	Command        Command
 	flagSet        *flag.FlagSet
 	setFlags       map[string]bool
+	setArgs        map[string]string
 	globalSetFlags map[string]bool
 	parentContext  *Context
 }
@@ -201,6 +202,12 @@ func (c *Context) GlobalFlagNames() (names []string) {
 		names = append(names, name)
 	}
 	return
+}
+
+// Returns a Named Argument by key
+func (c *Context) NamedArg(k string) string {
+	arg := c.parentContext.setArgs[k]
+	return arg
 }
 
 // Returns the parent context, if any

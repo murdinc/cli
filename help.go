@@ -39,10 +39,13 @@ COPYRIGHT:
 // cli.go uses text/template to render templates. You can
 // render custom help text by setting this variable.
 var CommandHelpTemplate = `NAME:
-   {{.HelpName}} - {{.Usage}}
+   {{.HelpName}}{{if .Usage}} - {{.Usage}}{{end}}
 
 USAGE:
-   {{.HelpName}}{{if .VisibleFlags}} [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{if .Category}}
+   {{.HelpName}}{{if .VisibleFlags}} [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{if len .Arguments}}
+
+ARGUMENTS:{{range .Arguments}}
+   {{if .Optional}}[{{.Name}}]{{else}}{{.Name}}{{end}} - {{.Description}}{{end}}{{end}}{{if .Category}}
 
 CATEGORY:
    {{.Category}}{{end}}{{if .Description}}

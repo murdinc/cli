@@ -38,6 +38,9 @@ type Command struct {
 	// TODO: replace `Action: interface{}` with `Action: ActionFunc` once some kind
 	// of deprecation period has passed, maybe?
 
+	// The list of required and optional arguments
+	Arguments []Argument
+
 	// Execute this function if a usage error occurs.
 	OnUsageError OnUsageErrorFunc
 	// List of child commands
@@ -52,6 +55,18 @@ type Command struct {
 	// Full name of command for help, defaults to full command name, including parent commands.
 	HelpName        string
 	commandNamePath []string
+}
+
+// Argument can be required or optional arguments for a cli.App commands.
+type Argument struct {
+	// The name of the command
+	Name string
+	// short name of the command. Typically one character
+	Usage string
+	// A longer explaination of how the command works
+	Description string
+	// Required defines if this argument is required for the command or not
+	Optional bool
 }
 
 // Returns the full name of the command.
@@ -86,6 +101,8 @@ func (c Command) Run(ctx *Context) (err error) {
 	set := flagSet(c.Name, c.Flags)
 	set.SetOutput(ioutil.Discard)
 
+	var argErr error
+
 	if !c.SkipFlagParsing {
 		firstFlagIndex := -1
 		terminatorIndex := -1
@@ -113,9 +130,10 @@ func (c Command) Run(ctx *Context) (err error) {
 			} else {
 				flagArgs = args[firstFlagIndex:]
 			}
-
+			argErr = c.BuildCustomArgs(ctx)
 			err = set.Parse(append(flagArgs, regularArgs...))
 		} else {
+			argErr = c.BuildCustomArgs(ctx)
 			err = set.Parse(ctx.Args().Tail())
 		}
 	} else {
@@ -124,7 +142,7 @@ func (c Command) Run(ctx *Context) (err error) {
 		}
 	}
 
-	if err != nil {
+	if err != nil || argErr != nil {
 		if c.OnUsageError != nil {
 			err := c.OnUsageError(ctx, err, false)
 			HandleExitCoder(err)
@@ -273,4 +291,38 @@ func (c Command) startApp(ctx *Context) error {
 // VisibleFlags returns a slice of the Flags with Hidden=false
 func (c Command) VisibleFlags() []Flag {
 	return visibleFlags(c.Flags)
+}
+
+func (c Command) BuildCustomArgs(ctx *Context) error {
+	// Combine the argument names with their entered values
+	// The order in the command input are known, their order in the context is unknown, so we do some crazy stuff to get them sorted out
+	i := 0 // counter for entered arg key
+	r := 0 // counter for required args
+	m := make(map[string]string)
+
+	// Count our number of required arguments for this command
+	for _, passedArg := range c.Arguments {
+		if !passedArg.Optional == true {
+			r++
+		}
+	}
+
+	// Map our known arguments with what was given, and note any unaccounted arguments
+	for _, val := range ctx.Args()[1:] {
+		if !strings.HasPrefix(val, "-") && len(c.Arguments) > i {
+			name := c.Arguments[i].Name
+			value := val
+			m[name] = value
+			i++
+		}
+	}
+
+	// Return an error if we were not given enough required arguments
+	if i < r {
+		err := fmt.Errorf("Not enough arguments! Expecting [%v] arguments, was given [%v].", r, i)
+		return err
+	}
+
+	ctx.setArgs = m
+	return nil
 }
