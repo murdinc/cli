@@ -33,7 +33,7 @@ func ExampleApp_Run() {
 	app.UsageText = "app [first_arg] [second_arg]"
 	app.Author = "Harrison"
 	app.Email = "harrison@lolwut.com"
-	app.Authors = []Author{Author{Name: "Oliver Allen", Email: "oliver@toyshop.com"}}
+	app.Authors = []Author{{Name: "Oliver Allen", Email: "oliver@toyshop.com"}}
 	app.Run(os.Args)
 	// Output:
 	// Hello Jeremy
@@ -304,6 +304,48 @@ func TestApp_CommandWithNoFlagBeforeTerminator(t *testing.T) {
 	expect(t, args[2], "notAFlagAtAll")
 }
 
+func TestApp_VisibleCommands(t *testing.T) {
+	app := NewApp()
+	app.Commands = []Command{
+		{
+			Name:     "frob",
+			HelpName: "foo frob",
+			Action:   func(_ *Context) error { return nil },
+		},
+		{
+			Name:     "frib",
+			HelpName: "foo frib",
+			Hidden:   true,
+			Action:   func(_ *Context) error { return nil },
+		},
+	}
+
+	app.Setup()
+	expected := []Command{
+		app.Commands[0],
+		app.Commands[2], // help
+	}
+	actual := app.VisibleCommands()
+	expect(t, len(expected), len(actual))
+	for i, actualCommand := range actual {
+		expectedCommand := expected[i]
+
+		if expectedCommand.Action != nil {
+			// comparing func addresses is OK!
+			expect(t, fmt.Sprintf("%p", expectedCommand.Action), fmt.Sprintf("%p", actualCommand.Action))
+		}
+
+		// nil out funcs, as they cannot be compared
+		// (https://github.com/golang/go/issues/8554)
+		expectedCommand.Action = nil
+		actualCommand.Action = nil
+
+		if !reflect.DeepEqual(expectedCommand, actualCommand) {
+			t.Errorf("expected\n%#v\n!=\n%#v", expectedCommand, actualCommand)
+		}
+	}
+}
+
 func TestApp_Float64Flag(t *testing.T) {
 	var meters float64
 
@@ -475,7 +517,7 @@ func TestApp_BeforeFunc(t *testing.T) {
 	}
 
 	app.Commands = []Command{
-		Command{
+		{
 			Name: "sub",
 			Action: func(c *Context) error {
 				counts.Total++
@@ -567,7 +609,7 @@ func TestApp_AfterFunc(t *testing.T) {
 	}
 
 	app.Commands = []Command{
-		Command{
+		{
 			Name: "sub",
 			Action: func(c *Context) error {
 				counts.Total++
@@ -682,7 +724,7 @@ func TestApp_CommandNotFound(t *testing.T) {
 	}
 
 	app.Commands = []Command{
-		Command{
+		{
 			Name: "bar",
 			Action: func(c *Context) error {
 				counts.Total++
@@ -749,7 +791,7 @@ func TestApp_OrderOfOperations(t *testing.T) {
 
 	app.After = afterNoError
 	app.Commands = []Command{
-		Command{
+		{
 			Name: "bar",
 			Action: func(c *Context) error {
 				counts.Total++
@@ -1083,16 +1125,17 @@ func TestApp_Run_Version(t *testing.T) {
 func TestApp_Run_Categories(t *testing.T) {
 	app := NewApp()
 	app.Name = "categories"
+	app.HideHelp = true
 	app.Commands = []Command{
-		Command{
+		{
 			Name:     "command1",
 			Category: "1",
 		},
-		Command{
+		{
 			Name:     "command2",
 			Category: "1",
 		},
-		Command{
+		{
 			Name:     "command3",
 			Category: "2",
 		},
@@ -1124,9 +1167,115 @@ func TestApp_Run_Categories(t *testing.T) {
 	output := buf.String()
 	t.Logf("output: %q\n", buf.Bytes())
 
-	if !strings.Contains(output, "1:\n    command1") {
-		t.Errorf("want buffer to include category %q, did not: \n%q", "1:\n    command1", output)
+	if !strings.Contains(output, "1:\n     command1") {
+		t.Errorf("want buffer to include category %q, did not: \n%q", "1:\n     command1", output)
 	}
+}
+
+func TestApp_VisibleCategories(t *testing.T) {
+	app := NewApp()
+	app.Name = "visible-categories"
+	app.HideHelp = true
+	app.Commands = []Command{
+		{
+			Name:     "command1",
+			Category: "1",
+			HelpName: "foo command1",
+			Hidden:   true,
+		},
+		{
+			Name:     "command2",
+			Category: "2",
+			HelpName: "foo command2",
+		},
+		{
+			Name:     "command3",
+			Category: "3",
+			HelpName: "foo command3",
+		},
+	}
+
+	expected := []*CommandCategory{
+		{
+			Name: "2",
+			Commands: []Command{
+				app.Commands[1],
+			},
+		},
+		{
+			Name: "3",
+			Commands: []Command{
+				app.Commands[2],
+			},
+		},
+	}
+
+	app.Setup()
+	expect(t, expected, app.VisibleCategories())
+
+	app = NewApp()
+	app.Name = "visible-categories"
+	app.HideHelp = true
+	app.Commands = []Command{
+		{
+			Name:     "command1",
+			Category: "1",
+			HelpName: "foo command1",
+			Hidden:   true,
+		},
+		{
+			Name:     "command2",
+			Category: "2",
+			HelpName: "foo command2",
+			Hidden:   true,
+		},
+		{
+			Name:     "command3",
+			Category: "3",
+			HelpName: "foo command3",
+		},
+	}
+
+	expected = []*CommandCategory{
+		{
+			Name: "3",
+			Commands: []Command{
+				app.Commands[2],
+			},
+		},
+	}
+
+	app.Setup()
+	expect(t, expected, app.VisibleCategories())
+
+	app = NewApp()
+	app.Name = "visible-categories"
+	app.HideHelp = true
+	app.Commands = []Command{
+		{
+			Name:     "command1",
+			Category: "1",
+			HelpName: "foo command1",
+			Hidden:   true,
+		},
+		{
+			Name:     "command2",
+			Category: "2",
+			HelpName: "foo command2",
+			Hidden:   true,
+		},
+		{
+			Name:     "command3",
+			Category: "3",
+			HelpName: "foo command3",
+			Hidden:   true,
+		},
+	}
+
+	expected = []*CommandCategory{}
+
+	app.Setup()
+	expect(t, expected, app.VisibleCategories())
 }
 
 func TestApp_Run_DoesNotOverwriteErrorFromBefore(t *testing.T) {
@@ -1151,9 +1300,9 @@ func TestApp_Run_DoesNotOverwriteErrorFromBefore(t *testing.T) {
 func TestApp_Run_SubcommandDoesNotOverwriteErrorFromBefore(t *testing.T) {
 	app := NewApp()
 	app.Commands = []Command{
-		Command{
+		{
 			Subcommands: []Command{
-				Command{
+				{
 					Name: "sub",
 				},
 			},
@@ -1191,7 +1340,7 @@ func TestApp_OnUsageError_WithWrongFlagValue(t *testing.T) {
 		return errors.New("intercepted: " + err.Error())
 	}
 	app.Commands = []Command{
-		Command{
+		{
 			Name: "bar",
 		},
 	}
@@ -1221,7 +1370,7 @@ func TestApp_OnUsageError_WithWrongFlagValue_ForSubcommand(t *testing.T) {
 		return errors.New("intercepted: " + err.Error())
 	}
 	app.Commands = []Command{
-		Command{
+		{
 			Name: "bar",
 		},
 	}
@@ -1306,4 +1455,17 @@ func TestHandleAction_WithInvalidFuncReturnSignature(t *testing.T) {
 	if exitErr.ExitCode() != 2 {
 		t.Fatalf("expected error exit code to be 2, but got: %v", exitErr.ExitCode())
 	}
+}
+
+func TestHandleAction_WithUnknownPanic(t *testing.T) {
+	defer func() { refute(t, recover(), nil) }()
+
+	var fn ActionFunc
+
+	app := NewApp()
+	app.Action = func(ctx *Context) error {
+		fn(ctx)
+		return nil
+	}
+	HandleAction(app.Action, NewContext(app, flagSet(app.Name, app.Flags), nil))
 }
