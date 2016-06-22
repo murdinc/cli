@@ -61,11 +61,11 @@ type Command struct {
 
 // Argument can be required or optional arguments for a cli.App commands.
 type Argument struct {
-	// The name of the command
+	// The name of the argument
 	Name string
-	// short name of the command. Typically one character
+	// A short description of the usage of this argument
 	Usage string
-	// A longer explaination of how the command works
+	// A longer explaination of how the argument works
 	Description string
 	// Required defines if this argument is required for the command or not
 	Optional bool
